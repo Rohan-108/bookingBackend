@@ -1,56 +1,56 @@
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary } from "cloudinary";
 
-import fs from 'fs';
-import { APIError } from './error';
-import { HttpStatusCode } from '../types/httpCode';
+import fs from "fs";
+import { APIError } from "./error.js";
+import { HttpStatusCode } from "../types/httpCode.js";
 
-const uploadImage = async (localFilePath: string) => {
+const uploadImage = async (localFilePath) => {
   try {
     if (!localFilePath) return null;
     const response = await cloudinary.uploader.upload(localFilePath, {
-      resource_type: 'image',
+      resource_type: "image",
     });
     fs.unlinkSync(localFilePath);
     return response;
-  } catch (error: any) {
+  } catch (error) {
     fs.unlink(localFilePath, (err) => {
       if (err) {
         console.error(error?.message);
         throw new APIError(
-          'Failed',
+          "Failed",
           HttpStatusCode.INTERNAL_SERVER,
           true,
-          'File Deletion failed',
+          "File Deletion failed"
         );
       }
     });
     throw new APIError(
-      'failed',
+      "failed",
       HttpStatusCode.INTERNAL_SERVER,
       true,
-      'Image upload failed',
+      "Image upload failed"
     );
   }
 };
 
-const deleteImage = async (publicId: string) => {
+const deleteImage = async (publicId) => {
   try {
     if (!publicId) {
       throw new APIError(
-        'BAD Request',
+        "BAD Request",
         HttpStatusCode.BAD_REQUEST,
         true,
-        'Please provide the image public id',
+        "Please provide the image public id"
       );
     }
     const response = await cloudinary.uploader.destroy(publicId);
     return response;
   } catch (error) {
     throw new APIError(
-      'Failed',
+      "Failed",
       HttpStatusCode.INTERNAL_SERVER,
       true,
-      'Image deletion failed',
+      "Image deletion failed"
     );
   }
 };

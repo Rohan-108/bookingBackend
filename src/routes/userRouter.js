@@ -1,14 +1,18 @@
 import { Router } from "express";
-import protect from "../middleware/auth";
-import upload from "../middleware/multer";
-import * as userController from "../controllers/userController";
-
+import protect from "../middleware/auth.js";
+import upload from "../middleware/multer.js";
+import * as userController from "../controllers/userController.js";
+import * as userValidator from "../validators/userValidator.js";
 const router = Router();
 
 router.route("/login").post(userController.login);
 router
   .route("/register")
-  .post(upload.single("avatar"), userController.registerUser);
+  .post(
+    upload.single("avatar"),
+    userValidator.registerValidator,
+    userController.registerUser
+  );
 router.route("/renewAccessToken").post(userController.renewAccessToken);
 //protected routes
 router.route("/logout").post(protect, userController.logout);

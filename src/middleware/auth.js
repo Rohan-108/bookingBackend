@@ -1,9 +1,8 @@
 import jwt from "jsonwebtoken";
-import { NextFunction, Request, Response } from "express";
-import User from "../models/userModel";
-import { APIError } from "../utils/error";
-import { HttpStatusCode } from "../types/httpCode";
-const protect = async (req: Request, res: Response, next: NextFunction) => {
+import User from "../models/userModel.js";
+import { APIError } from "../utils/error.js";
+import { HttpStatusCode } from "../constants/httpCode.js";
+const protect = async (req, res, next) => {
   try {
     const token =
       req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
@@ -15,10 +14,7 @@ const protect = async (req: Request, res: Response, next: NextFunction) => {
         "Token Not Found"
       );
     }
-    const decodedToken = jwt.verify(
-      token,
-      process.env.ACCESS_TOKEN_SECRET as string
-    ) as jwt.JwtPayload;
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     const user = await User.findById(decodedToken?._id).lean();
     if (!user) {
       throw new APIError(
@@ -30,13 +26,8 @@ const protect = async (req: Request, res: Response, next: NextFunction) => {
     }
     req.user = user;
     next();
-  } catch (error: any) {
-    throw new APIError(
-      "UnAuthorized",
-      HttpStatusCode.UNAUTHORIZED,
-      true,
-      error?.message || "Invalid access token"
-    );
+  } catch (error) {
+    next(error);
   }
 };
 export default protect;
