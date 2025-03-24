@@ -22,8 +22,13 @@ router
     vehicleController.archiveVehicle
   );
 router
-  .route("/")
-  .patch(protect, upload.array("images", 3), vehicleController.updateVehicle);
+  .route("/:id")
+  .patch(
+    protect,
+    upload.array("images", 3),
+    vehicleValidator.updateVehicleValidator,
+    vehicleController.updateVehicle
+  );
 
 //public routes
 router.route("/").get(vehicleController.getVehicles);

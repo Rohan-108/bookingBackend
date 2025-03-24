@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
 
+/**
+ * @description - This function is used to run a transaction in MongoDB
+ * @param {*} callback - The callback function to be executed in the transaction
+ */
 export const runInTransaction = async (callback) => {
   const session = await mongoose.startSession();
   session.startTransaction();

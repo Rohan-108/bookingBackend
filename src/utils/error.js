@@ -1,4 +1,9 @@
 import { HttpStatusCode } from "../constants/httpCode.js";
+/**
+ * @class BaseError
+ * @extends {Error}
+ * @description Base error class
+ */
 class BaseError extends Error {
   constructor(name, httpCode, isOperational, description) {
     super(description);
@@ -10,6 +15,12 @@ class BaseError extends Error {
     Error.captureStackTrace(this);
   }
 }
+
+/**
+ * @class APIError
+ * @extends {BaseError}
+ * @description API error class
+ */
 class APIError extends BaseError {
   constructor(
     name,

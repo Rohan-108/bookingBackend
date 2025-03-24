@@ -3,8 +3,15 @@ import { MIN_BID_AMOUNT, MAX_BID_AMOUNT } from "../constants/constants.js";
 
 // Bid validation schema for adding the bid
 export const addBidValidator = checkSchema({
+  carId: {
+    in: ["params"],
+    isMongoId: true,
+    exists: true,
+    errorMessage: "Invalid car id",
+  },
   amount: {
     in: ["body"],
+    exists: true,
     isInt: {
       options: { min: MIN_BID_AMOUNT, max: MAX_BID_AMOUNT },
       errorMessage: "Amount must be greater than 0",
@@ -15,10 +22,12 @@ export const addBidValidator = checkSchema({
     isDate: {
       errorMessage: "Start date must be a date",
     },
+    exists: true,
     errorMessage: "Start date is required",
   },
   endDate: {
     in: ["body"],
+    exists: true,
     isDate: {
       errorMessage: "End date must be a date",
     },
@@ -34,16 +43,19 @@ export const addBidValidator = checkSchema({
   isOutStation: {
     in: ["body"],
     isBoolean: true,
+    exists: true,
     errorMessage: "Is outstation is required",
   },
   tripCompleted: {
     in: ["body"],
     isBoolean: true,
+    exists: true,
     errorMessage: "Trip completed is required",
   },
   status: {
     in: ["body"],
     isString: true,
+    exists: true,
     isIn: {
       options: [["pending", "approved", "rejected"]],
       errorMessage: "Invalid status",
@@ -79,12 +91,12 @@ export const filterBids = checkSchema({
   },
   filter: {
     in: ["query"],
-    isObject: true,
+    isJSON: true,
     optional: true,
   },
   sort: {
     in: ["query"],
-    isObject: true,
+    isJSON: true,
     optional: true,
   },
 });

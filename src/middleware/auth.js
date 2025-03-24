@@ -2,6 +2,9 @@ import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import { APIError } from "../utils/error.js";
 import { HttpStatusCode } from "../constants/httpCode.js";
+/**
+ * @description Protect routes (check if user is authenticated)
+ */
 const protect = async (req, res, next) => {
   try {
     const token =
@@ -15,7 +18,7 @@ const protect = async (req, res, next) => {
       );
     }
     const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    const user = await User.findById(decodedToken?._id).lean();
+    const user = await User.findById(decodedToken?._id);
     if (!user) {
       throw new APIError(
         "UnAuthorized",

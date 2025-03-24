@@ -5,7 +5,9 @@ import * as userController from "../controllers/userController.js";
 import * as userValidator from "../validators/userValidator.js";
 const router = Router();
 
-router.route("/login").post(userController.login);
+router
+  .route("/login")
+  .post(userValidator.loginValidator, userController.loginUser);
 router
   .route("/register")
   .post(
@@ -15,10 +17,16 @@ router
   );
 router.route("/renewAccessToken").post(userController.renewAccessToken);
 //protected routes
-router.route("/logout").post(protect, userController.logout);
-router.route("/changePassword").patch(protect, userController.changePassword);
-router.route("/updateUsername").patch(protect, userController.updateUsername);
+router.route("/logout").post(protect, userController.logoutUser);
 router
-  .route("/updateAvatar")
-  .patch(protect, upload.single("avatar"), userController.updateAvatar);
+  .route("/changePassword")
+  .patch(protect, userValidator.changePassword, userController.changePassword);
+router
+  .route("/")
+  .patch(
+    protect,
+    upload.single("avatar"),
+    userValidator.updateUser,
+    userController.updateUser
+  );
 export default router;

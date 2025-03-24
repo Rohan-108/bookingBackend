@@ -11,6 +11,8 @@ const MAX_Fixed_KILOMETER = 10000; // Maximum fixed kilometer
 const MIN_RATE_PER_KM = 0; // Minimum rate per km
 const MAX_RATE_PER_KM = 5; // Maximum rate per km
 const roles = ["user", "admin", "superadmin"]; // Enum for user roles
+const MIN_BID_AMOUNT = 0;
+const MAX_BID_AMOUNT = 1000000;
 // Enum for vehicle type
 const vehicleTypeEnum = [
   "Sedan",
@@ -39,6 +41,8 @@ const vehicleTypeEnum = [
 
 export {
   MAX_Fixed_KILOMETER,
+  MAX_BID_AMOUNT,
+  MIN_BID_AMOUNT,
   MAX_RATE_PER_KM,
   MAX_RENTAL_PERIOD,
   MAX_RENTAL_PRICE,

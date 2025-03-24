@@ -7,7 +7,7 @@ const router = Router();
 
 //protected routes
 router
-  .route("/:id")
+  .route("/:carId")
   .post(protect, bidValidator.addBidValidator, bidController.addBid);
 
 router
@@ -24,4 +24,6 @@ router
   .route("/reject/:id")
   .patch(protect, bidValidator.checkId, bidController.rejectBid);
 
+//public routes
+router.route("/bookedDates/:carId").get(bidController.getBookedDates);
 export default router;

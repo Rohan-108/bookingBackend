@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer } from "node:http";
 import ErrorHandler from "./middleware/errorHandler.js";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -8,8 +9,11 @@ import healthCheckRouter from "./routes/healthCheckerRouter.js";
 import userRouter from "./routes/userRouter.js";
 import vehicleRouter from "./routes/vehicleRouter.js";
 import bidRouter from "./routes/bidRouter.js";
+import conversationRouter from "./routes/conversationRouter.js";
+import chatRouter from "./routes/chatRouter.js";
 import * as dotenv from "dotenv";
 import cors from "cors";
+import { initChatSocket } from "./socket/chatSocket.js";
 //import { v2 as cloudinary } from "cloudinary";
 //config
 dotenv.config();
@@ -20,6 +24,9 @@ dotenv.config();
 // });
 
 const app = express();
+const server = createServer(app);
+//socket
+initChatSocket(server);
 //middlewares
 app.use(morgan("dev"));
 app.use(cors());
@@ -33,6 +40,8 @@ app.use("/api/v1/", healthCheckRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/vehicles", vehicleRouter);
 app.use("/api/v1/bids", bidRouter);
+app.use("/api/v1/conversations", conversationRouter);
+app.use("/api/v1/chats", chatRouter);
 //error handling middleware
 app.use(async (err, req, res, next) => {
   if (!ErrorHandler.isTrustedError(err)) {
@@ -42,12 +51,12 @@ app.use(async (err, req, res, next) => {
 });
 
 process.on("unhandledRejection", (err) => {
-  console.log("UNHANDLED REJECTION! 💥 Shutting down...");
+  console.log("UNHANDLED REJECTION! Shutting down...");
   console.log(err.name, err.message, err);
   process.exit(1);
 });
 process.on("uncaughtException", (err) => {
-  console.log("UNCAUGHT EXCEPTION! 💥 Shutting down...");
+  console.log("UNCAUGHT EXCEPTION!  Shutting down...");
   console.log(err.name, err.message);
   process.exit(1);
 });
@@ -55,15 +64,11 @@ process.on("uncaughtException", (err) => {
 const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
-    connectDB(process.env.MONGODB_URL);
-    app.listen(PORT, () => console.log(`server started at port ${PORT}`));
+    await connectDB(process.env.MONGODB_URL);
+    server.listen(PORT, () => console.log(`server started at port ${PORT}`));
   } catch (error) {
-    if (error instanceof Error) {
-      console.log(error.message);
-    } else {
-      console.log("An unknown error occurred");
-    }
+    console.log(error.message);
   }
 };
 startServer();
-export default app;
+export default server;

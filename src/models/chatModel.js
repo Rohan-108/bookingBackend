@@ -7,21 +7,13 @@ const sender = {
     index: true,
     required: [true, "Owner id is required"],
   },
-  name: {
+  username: {
     type: String,
     required: [true, "Name is required"],
   },
   email: {
     type: String,
     required: [true, "Email is required"],
-  },
-  tel: {
-    type: String,
-    required: [true, "Tel is required"],
-  },
-  adhaar: {
-    type: String,
-    required: [true, "Adhaar is required"],
   },
   avatar: {
     type: String,

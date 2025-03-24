@@ -2,8 +2,12 @@ import { v2 as cloudinary } from "cloudinary";
 
 import fs from "fs";
 import { APIError } from "./error.js";
-import { HttpStatusCode } from "../types/httpCode.js";
+import { HttpStatusCode } from "../constants/httpCode.js";
 
+/**
+ * @description - This function is used to upload an image to cloudinary
+ * @param {*} localFilePath - The local path of the file to be uploaded
+ */
 const uploadImage = async (localFilePath) => {
   try {
     if (!localFilePath) return null;
@@ -33,6 +37,10 @@ const uploadImage = async (localFilePath) => {
   }
 };
 
+/**
+ * @description - This function is used to delete an image from cloudinary
+ * @param {*} publicId - The public id of the image to be deleted
+ */
 const deleteImage = async (publicId) => {
   try {
     if (!publicId) {

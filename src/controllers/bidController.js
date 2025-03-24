@@ -21,19 +21,29 @@ const addBid = asyncHandler(async (req, res) => {
       errors.array()
     );
   }
-  const carId = req.params.id;
+  const carId = req.params.carId;
   const vehicle = await Vehicle.findById(carId);
   const bid = await Bid.create({
     ...req.body,
     user: {
       _id: req.user._id,
-      name: req.user?.username,
+      username: req.user?.username,
       email: req.user?.email,
       adhaar: req.user?.adhaar,
       tel: req.user?.tel,
       avatar: req.user?.avatar,
     },
-    vehicle: vehicle,
+    vehicle: {
+      _id: vehicle._id,
+      name: vehicle.name,
+      plateNumber: vehicle.plateNumber,
+      rentalPrice: vehicle.rentalPrice,
+      seats: vehicle.seats,
+      rentalPriceOutStation: vehicle.rentalPriceOutStation,
+      ratePerKm: vehicle.ratePerKm,
+      fixedKilometer: vehicle.fixedKilometer,
+      owner: vehicle.owner,
+    },
   });
   await bid.save();
   res
@@ -59,14 +69,14 @@ const getAllByUser = asyncHandler(async (req, res) => {
   }
 
   const { pageNumber = 1, pageSize = 10 } = req.query;
-  const { filter = {}, sort = { createdAt: -1 } } = req.query;
+  let { filter = {}, sort = { createdAt: -1 } } = req.query;
+  filter = JSON.parse(filter);
+  sort = JSON.parse(sort);
   const userId = req.user._id;
-  const [
-    {
-      total: [total = 0],
-      bids,
-    },
-  ] = await Bid.aggregate([
+  const pageSizeInt = parseInt(pageSize);
+  const pageNumberInt = parseInt(pageNumber);
+  //aggregate query to get all bids by user
+  const [{ total, bids, pages }] = await Bid.aggregate([
     {
       $match: {
         "user._id": userId,
@@ -80,15 +90,23 @@ const getAllByUser = asyncHandler(async (req, res) => {
         total: [{ $group: { _id: null, count: { $sum: 1 } } }],
         bids: [
           { $sort: sort },
-          { $skip: pageSize * (pageNumber - 1) },
-          { $limit: pageSize },
+          { $skip: pageSizeInt * (pageNumberInt - 1) },
+          { $limit: pageSizeInt },
         ],
       },
     },
     {
       $project: {
-        total: "$total.count",
-        bids: "$bids",
+        total: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+        bids: 1,
+        pages: {
+          $ceil: {
+            $divide: [
+              { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+              pageSizeInt,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -97,7 +115,7 @@ const getAllByUser = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         HttpStatusCode.OK,
-        { total, bids },
+        { total, bids, pages },
         "Bids retrieved successfully"
       )
     );
@@ -119,14 +137,14 @@ const getAllByOwner = asyncHandler(async (req, res) => {
   }
 
   const { pageNumber = 1, pageSize = 10 } = req.query;
-  const { filter = {}, sort = { createdAt: -1 } } = req.body;
+  let { filter = {}, sort = { createdAt: -1 } } = req.query;
+  filter = JSON.parse(filter);
+  sort = JSON.parse(sort);
   const userId = req.user._id;
-  const [
-    {
-      total: [total = 0],
-      bids,
-    },
-  ] = await Bid.aggregate([
+  const pageNumberInt = parseInt(pageNumber);
+  const pageSizeInt = parseInt(pageSize);
+  //aggregate query to get all bids by owner
+  const [{ total, bids, pages }] = await Bid.aggregate([
     {
       $match: {
         "vehicle.owner._id": userId,
@@ -140,15 +158,23 @@ const getAllByOwner = asyncHandler(async (req, res) => {
         total: [{ $group: { _id: null, count: { $sum: 1 } } }],
         bids: [
           { $sort: sort },
-          { $skip: pageSize * (pageNumber - 1) },
-          { $limit: pageSize },
+          { $skip: pageSizeInt * (pageNumberInt - 1) },
+          { $limit: pageSizeInt },
         ],
       },
     },
     {
       $project: {
-        total: "$total.count",
-        bids: "$bids",
+        total: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+        bids: 1,
+        pages: {
+          $ceil: {
+            $divide: [
+              { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+              pageSizeInt,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -157,7 +183,7 @@ const getAllByOwner = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         HttpStatusCode.OK,
-        { total, bids },
+        { total, bids, pages },
         "Bids retrieved successfully"
       )
     );
@@ -187,6 +213,7 @@ const rejectBid = asyncHandler(async (req, res) => {
       "Bid not found"
     );
   }
+  //reject the bid
   bid.status = "rejected";
   await bid.save();
   res
@@ -212,12 +239,13 @@ const approveBid = asyncHandler(async (req, res) => {
   const bid = await Bid.findById(bidId);
   await runInTransaction(async (session) => {
     //approve the bid
-    await Bid.findByIdAndUpdate(bidId, { status: "rejected" }, { session });
+    await Bid.findByIdAndUpdate(bidId, { status: "approved" }, { session });
     //reject all other bids that overlap with the approved bid
     await Bid.updateMany(
       {
         startDate: { $lte: bid.endDate }, // Bid starts on or before the provided end
         endDate: { $gte: bid.startDate }, // Bid ends on or after the provided start
+        status: "pending",
       },
       { $set: { status: "rejected" } },
       { session }
@@ -229,4 +257,45 @@ const approveBid = asyncHandler(async (req, res) => {
     .json(new ApiResponse(HttpStatusCode.OK, bid, "Bid approved successfully"));
 });
 
-export { addBid, getAllByUser, getAllByOwner, rejectBid, approveBid };
+/**
+ * @description Get booked dates for a car
+ * @route GET /api/v1/bids/bookedDates/:carId
+ */
+const getBookedDates = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new APIError(
+      "Bad Request",
+      HttpStatusCode.BAD_REQUEST,
+      true,
+      errors.array()
+    );
+  }
+  const carId = req.params.carId;
+  const bids = await Bid.find({
+    "vehicle._id": carId,
+    status: "approved",
+  });
+  const bookedDates = bids.map((bid) => ({
+    startDate: bid.startDate,
+    endDate: bid.endDate,
+  }));
+  res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        { bookedDates },
+        "Booked dates retrieved successfully"
+      )
+    );
+});
+
+export {
+  addBid,
+  getAllByUser,
+  getAllByOwner,
+  rejectBid,
+  approveBid,
+  getBookedDates,
+};

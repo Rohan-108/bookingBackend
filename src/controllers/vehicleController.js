@@ -4,6 +4,7 @@ import ApiResponse from "../utils/ApiResponse.js";
 import { HttpStatusCode } from "../constants/httpCode.js";
 import Vehicle from "../models/vehicleModel.js";
 import { validationResult } from "express-validator";
+import { Types } from "mongoose";
 
 /**
  * @description Add vehicle to the database
@@ -25,7 +26,7 @@ const addVehicle = asyncHandler(async (req, res) => {
     images: images,
     owner: {
       _id: req.user._id,
-      name: req.user?.username,
+      username: req.user?.username,
       email: req.user?.email,
       adhaar: req.user?.adhaar,
       tel: req.user?.tel,
@@ -38,7 +39,7 @@ const addVehicle = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         HttpStatusCode.CREATED,
-        vehicle,
+        { vehicle },
         "Vehicle added successfully"
       )
     );
@@ -96,32 +97,73 @@ const archiveVehicle = asyncHandler(async (req, res) => {
  * @route GET /api/v1/vehicles?pageNumber=1&pageSize=10
  */
 const getVehicles = asyncHandler(async (req, res) => {
-  const { pageNumber = 1, pageSize = 10 } = req.query;
-  const { filter = {}, sort = {} } = req.body;
+  const { pageNumber = 1, pageSize = 10, searchText = "" } = req.query;
+  let { filter = {}, sort = {} } = req.query;
+  filter = JSON.parse(filter);
+  sort = JSON.parse(sort);
+
+  // Remove filters with the value "ALL"
+  let minPrice, maxPrice;
+  Object.keys(filter).forEach((key) => {
+    if (filter[key] === "All") {
+      delete filter[key];
+    } else if (key === "minPrice") {
+      minPrice = filter[key];
+      delete filter[key];
+    } else if (key === "maxPrice") {
+      maxPrice = filter[key];
+      delete filter[key];
+    }
+  });
+  console.log(filter, minPrice, maxPrice);
+  // Build the final filter object; always ensure that show is true.
   const finalFilter = { ...filter, show: true };
-  const finalSort = { ...sort, createdAt: -1 };
+
+  // Apply rentalPrice range if both minPrice and maxPrice are provided
+  if (minPrice !== undefined && maxPrice !== undefined) {
+    finalFilter.rentalPrice = { $gte: minPrice, $lte: maxPrice };
+  }
+
+  // Apply search text filter for vehicle name if provided
+  if (searchText && searchText.length > 0) {
+    finalFilter.name = { $regex: searchText, $options: "i" };
+  }
+
+  // Convert any filter key ending with _id to ObjectId type
+  for (const key in finalFilter) {
+    if (key.includes("_id") && typeof finalFilter[key] === "string") {
+      finalFilter[key] = new Types.ObjectId(finalFilter[key]);
+    }
+  }
+
+  // Prepare pagination values
+  const pageSizeInt = parseInt(pageSize);
+  const pageNumberInt = parseInt(pageNumber);
   // Aggregate query to get total count and paginated vehicles
-  const [
-    {
-      total: [total = 0],
-      vehicles,
-    },
-  ] = await Vehicle.aggregate([
+  const [{ total, vehicles, pages }] = await Vehicle.aggregate([
     { $match: finalFilter },
     {
       $facet: {
         total: [{ $group: { _id: null, count: { $sum: 1 } } }],
         vehicles: [
-          { $sort: finalSort },
-          { $skip: pageSize * (pageNumber - 1) },
-          { $limit: pageSize },
+          { $sort: { ...sort, createdAt: -1 } },
+          { $skip: pageSizeInt * (pageNumberInt - 1) },
+          { $limit: pageSizeInt },
         ],
       },
     },
     {
       $project: {
-        total: "$total.count",
-        vehicles: "$vehicles",
+        total: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+        vehicles: 1,
+        pages: {
+          $ceil: {
+            $divide: [
+              { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+              pageSizeInt,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -131,7 +173,7 @@ const getVehicles = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         HttpStatusCode.OK,
-        { total, vehicles },
+        { total, vehicles, pages },
         "Vehicles retrieved successfully"
       )
     );
@@ -156,12 +198,16 @@ const getVehicle = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         HttpStatusCode.OK,
-        vehicle,
+        { vehicle },
         "Vehicle retrieved successfully"
       )
     );
 });
 
+/**
+ * @description Update vehicle by id
+ * @route PATCH /api/v1/vehicles/:id
+ */
 const updateVehicle = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

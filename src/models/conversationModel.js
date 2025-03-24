@@ -6,7 +6,7 @@ const memberSchema = {
     type: Schema.Types.ObjectId,
     required: [true, "Owner id is required"],
   },
-  name: {
+  username: {
     type: String,
     required: [true, "Name is required"],
   },
@@ -14,21 +14,13 @@ const memberSchema = {
     type: String,
     required: [true, "Email is required"],
   },
-  tel: {
-    type: String,
-    required: [true, "Tel is required"],
-  },
-  adhaar: {
-    type: String,
-    required: [true, "Adhaar is required"],
-  },
   avatar: {
     type: String,
     required: [true, "Avatar is required"],
   },
 };
 // Car schema
-const carSchema = {
+const vehicleSchema = {
   _id: {
     type: Schema.Types.ObjectId,
     index: true,
@@ -73,9 +65,9 @@ const conversationSchema = new Schema(
       type: [memberSchema],
       required: [true, "Members are required"],
     },
-    car: {
-      type: carSchema,
-      required: [true, "Car is required"],
+    vehicle: {
+      type: vehicleSchema,
+      required: [true, "Vehicle is required"],
     },
   },
   { timestamps: true }

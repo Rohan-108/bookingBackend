@@ -27,7 +27,7 @@ const ownerSchema = {
     index: true,
     required: [true, "Owner id is required"],
   },
-  name: {
+  username: {
     type: String,
     required: [true, "Name is required"],
   },

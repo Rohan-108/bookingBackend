@@ -14,6 +14,9 @@ import {
   vehicleTypeEnum,
   fuelEnum,
 } from "../constants/constants.js";
+/**
+ * @description Validate vehicle addition request
+ */
 export const addVehicleValidator = checkSchema({
   name: {
     in: ["body"],
@@ -139,6 +142,96 @@ export const addVehicleValidator = checkSchema({
   },
 });
 
+/**
+ * @description Validate vehicle id and update request
+ */
+export const updateVehicleValidator = checkSchema({
+  id: {
+    in: ["params"],
+    isMongoId: true,
+    exists: true,
+    errorMessage: "Vehicle id is required",
+  },
+  rentalPrice: {
+    in: ["body"],
+    isInt: {
+      options: {
+        min: MIN_RENTAL_PRICE,
+        max: MAX_RENTAL_PRICE,
+      },
+      errorMessage: "Rental price isn't in range",
+    },
+    exists: true,
+    errorMessage: "Rental price is required",
+  },
+  rentalPriceOutStation: {
+    in: ["body"],
+    isInt: {
+      options: {
+        min: MIN_RENTAL_PRICE,
+        max: MAX_RENTAL_PRICE,
+      },
+      errorMessage: "Rental price isn't in range",
+    },
+    exists: true,
+    errorMessage: "Rental price is required",
+  },
+  ratePerKm: {
+    in: ["body"],
+    isInt: {
+      options: {
+        min: MIN_RATE_PER_KM,
+        max: MAX_RATE_PER_KM,
+      },
+      errorMessage: "Rate per km isn't in range",
+    },
+    exists: true,
+    errorMessage: "Rate per km is required",
+  },
+  fixedKilometer: {
+    in: ["body"],
+    isInt: {
+      options: {
+        min: MIN_Fixed_KILOMETER,
+        max: MAX_Fixed_KILOMETER,
+      },
+    },
+    exists: true,
+    errorMessage: "Fixed kilometer is required",
+  },
+  minRentalPeriod: {
+    in: ["body"],
+    isInt: {
+      options: {
+        min: MIN_RENTAL_PERIOD,
+        max: MAX_RENTAL_PERIOD,
+      },
+    },
+    exists: true,
+    errorMessage: "Minimum rental period is required",
+  },
+  maxRentalPeriod: {
+    in: ["body"],
+    isInt: {
+      options: {
+        min: MIN_RENTAL_PERIOD,
+        max: MAX_RENTAL_PERIOD,
+      },
+    },
+    exists: true,
+    errorMessage: "Maximum rental period is required",
+  },
+  location: {
+    in: ["body"],
+    isString: true,
+    exists: true,
+    errorMessage: "Location is required",
+  },
+});
+
+/**
+ * @description Validate vehicle id
+ */
 export const archiveVehicleValidator = checkSchema({
   id: {
     in: ["params"],

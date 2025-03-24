@@ -2,13 +2,18 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { APIError } from "../utils/error.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import User from "../models/userModel.js";
-import { isStrongPassword, isEmail } from "../utils/validators.js";
 import jwt from "jsonwebtoken";
 import { deleteFile } from "../utils/awsS3.js";
 import { HttpStatusCode } from "../constants/httpCode.js";
-
+import { validationResult } from "express-validator";
+//cookie options
+const options = {
+  httpOnly: true,
+  //secure: true,
+};
 /**
  * @description Generate access and refresh token
+ * @param {String} userId - User id
  */
 const generateToken = async (userId) => {
   try {
@@ -35,37 +40,22 @@ const generateToken = async (userId) => {
     );
   }
 };
-//cookie options
-const options = {
-  httpOnly: true,
-  secure: true,
-};
-
 /**
  * @description Login user
  * @route POST /api/v1/users/login
  * @access Public
- * @param {Request} req
- * @param {Response} res
  */
-const login = asyncHandler(async (req, res) => {
+const loginUser = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new APIError(
+      "Bad Request",
+      HttpStatusCode.BAD_REQUEST,
+      true,
+      errors.array()
+    );
+  }
   const { email, password } = req.body;
-  if (!email || !password) {
-    throw new APIError(
-      "Bad Request",
-      HttpStatusCode.BAD_REQUEST,
-      true,
-      "Please provide email and password"
-    );
-  }
-  if (!isEmail(email)) {
-    throw new APIError(
-      "Bad Request",
-      HttpStatusCode.BAD_REQUEST,
-      true,
-      "Please provide a valid email"
-    );
-  }
   const user = await User.findOne({ email });
   if (!user) {
     throw new APIError(
@@ -90,12 +80,12 @@ const login = asyncHandler(async (req, res) => {
   );
 
   return res
-    .status(200)
+    .status(HttpStatusCode.OK)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", user.refreshToken, options)
     .json(
       new ApiResponse(
-        200,
+        HttpStatusCode.OK,
         {
           user: loggedUser,
           accessToken,
@@ -110,38 +100,20 @@ const login = asyncHandler(async (req, res) => {
  * @access Public
  */
 const registerUser = asyncHandler(async (req, res) => {
-  const { email, username, password } = req.body;
-  console.log(req.body);
-  if (
-    [email, username, password].some(
-      (field) => field?.trim() === "" || field === null
-    )
-  ) {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    await deleteFile(req.file.location);
     throw new APIError(
       "Bad Request",
       HttpStatusCode.BAD_REQUEST,
       true,
-      "Please provide email, username and password"
+      errors.array()
     );
   }
-  if (!isEmail(email)) {
-    throw new APIError(
-      "Bad Request",
-      HttpStatusCode.BAD_REQUEST,
-      true,
-      "Please provide a valid email"
-    );
-  }
-  if (!isStrongPassword(password)) {
-    throw new APIError(
-      "Bad Request",
-      HttpStatusCode.BAD_REQUEST,
-      true,
-      "Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character"
-    );
-  }
+  const { email } = req.body;
   const existingUser = await User.findOne({ email });
   if (existingUser) {
+    await deleteFile(req.file.location);
     throw new APIError(
       "Conflict",
       HttpStatusCode.CONFLICT,
@@ -151,19 +123,21 @@ const registerUser = asyncHandler(async (req, res) => {
   }
   const avatarUrl = req.file.location;
   const user = await User.create({
-    email,
-    username,
-    password,
+    ...req.body,
     avatar: avatarUrl || "https://picsum.photos/200/300",
   });
   await user.save();
   const { accessToken, refreshToken } = await generateToken(user._id);
   res
-    .status(201)
+    .status(HttpStatusCode.CREATED)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
     .json(
-      new ApiResponse(201, { user, accessToken }, "User created successfully")
+      new ApiResponse(
+        HttpStatusCode.CREATED,
+        { user, accessToken },
+        "User created successfully"
+      )
     );
 });
 /**
@@ -171,25 +145,25 @@ const registerUser = asyncHandler(async (req, res) => {
  * @route POST /api/v1/users/logout
  * @access Private
  */
-const logout = asyncHandler(async (req, res) => {
+const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     { $unset: { refreshToken: 1 } },
     { new: true }
   );
   return res
-    .status(200)
+    .status(HttpStatusCode.OK)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
-    .json(new ApiResponse(200, {}, "User logged out successfully"));
+    .json(
+      new ApiResponse(HttpStatusCode.OK, {}, "User logged out successfully")
+    );
 });
 
 /**
  * @description Renew access token
  * @route POST /api/v1/users/renewAccessToken
  * @access Private
- * @param {Request} req
- * @param {Response} res
  */
 const renewAccessToken = asyncHandler(async (req, res) => {
   const sendedRefereshToken = req.cookies?.refreshToken;
@@ -216,31 +190,34 @@ const renewAccessToken = asyncHandler(async (req, res) => {
   }
   const { accessToken, refreshToken } = await generateToken(user._id);
   return res
-    .status(200)
+    .status(HttpStatusCode.OK)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
     .json(
-      new ApiResponse(200, { accessToken }, "Access token renewed successfully")
+      new ApiResponse(
+        HttpStatusCode.OK,
+        { accessToken },
+        "Access token renewed successfully"
+      )
     );
 });
 
 /**
  * @description Change password
- * @route PUT /api/v1/users/changePassword
+ * @route PATCH /api/v1/users/changePassword
  * @access Private
- * @param {Request} req
- * @param {Response} res
  */
 const changePassword = asyncHandler(async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  if (!oldPassword || !newPassword) {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
     throw new APIError(
       "BAD REQUEST",
       HttpStatusCode.BAD_REQUEST,
       true,
-      "Please provide old password and new password"
+      errors.array()
     );
   }
+  const { oldPassword, newPassword } = req.body;
   if (oldPassword === newPassword) {
     throw new APIError(
       "BAD REQUEST",
@@ -258,93 +235,58 @@ const changePassword = asyncHandler(async (req, res) => {
       "Invalid old password"
     );
   }
-  if (!isStrongPassword(newPassword)) {
+  const user = await User.findById(req.user._id);
+  user.password = newPassword;
+  await user.save();
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(HttpStatusCode.OK, {}, "Password changed successfully")
+    );
+});
+
+/**
+ * @description Update user
+ * @route PATCH /api/v1/users
+ * @access Private
+ */
+const updateUser = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    if (req.file?.location) {
+      await deleteFile(req.file?.location);
+    }
     throw new APIError(
       "BAD REQUEST",
       HttpStatusCode.BAD_REQUEST,
       true,
-      "Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character"
+      errors.array()
     );
   }
-  await User.findByIdAndUpdate(
-    req.user._id,
-    { password: newPassword },
-    { new: true }
-  );
-  return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Password changed successfully"));
-});
-
-/**
- * @description Update username
- * @route PUT /api/v1/users/updateUsername
- * @access Private
- * @param {Request} req
- * @param {Response} res
- */
-
-const updateUsername = asyncHandler(async (req, res) => {
-  const { username } = req.body;
-  if (!username) {
-    throw new APIError(
-      "BAD REQUEST",
-      HttpStatusCode.BAD_REQUEST,
-      true,
-      "Please provide a username"
-    );
-  }
-  const user = await User.findByIdAndUpdate(
-    req.user._id,
-    { username },
-    { new: true }
-  ).select("-password -refreshToken");
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { user }, "Profile updated successfully"));
-});
-
-/**
- * @description Update avatar
- * @route PUT /api/v1/users/updateAvatar
- * @access Private
- * @param {Request} req
- * @param {Response} res
- */
-const updateAvatar = asyncHandler(async (req, res) => {
-  const avatarUrl = req.file?.location;
-  if (!avatarUrl) {
-    throw new APIError(
-      "INTERNAL SERVER ERROR",
-      HttpStatusCode.INTERNAL_SERVER,
-      true,
-      "Something went wrong while uploading image"
-    );
-  }
-  //delete old photo
-  const oldAvatar = req.user?.avatar;
-  const defaultOne = "https://picsum.photos/200/300";
-  if (oldAvatar !== defaultOne) {
-    await deleteFile(oldAvatar);
-  }
+  const avatarUrl = req.file?.location || req.user.avatar;
+  await deleteFile(req.user.avatar);
   const user = await User.findByIdAndUpdate(
     req.user._id,
     {
-      $set: { avatar: avatarUrl },
+      ...req.body,
+      avatar: avatarUrl,
     },
-    { new: true }
+    {
+      new: true,
+    }
   ).select("-password -refreshToken");
   return res
-    .status(200)
-    .json(new ApiResponse(200, { user }, "Avatar updated successfully"));
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(HttpStatusCode.OK, { user }, "User updated successfully")
+    );
 });
 
 export {
-  login,
+  loginUser,
   registerUser,
-  logout,
+  logoutUser,
   renewAccessToken,
   changePassword,
-  updateUsername,
-  updateAvatar,
+  updateUser,
 };
