@@ -28,7 +28,6 @@ const chatSchema = new Schema(
     },
     message: {
       type: String,
-      minLength: [1, "Message is too short"],
       maxLength: [1000, "Message is too long"],
     },
     image: {

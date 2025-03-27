@@ -3,14 +3,18 @@ import { APIError } from "../utils/error.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
-import { deleteFile } from "../utils/awsS3.js";
+import { deleteFile } from "../services/awsS3.js";
 import { HttpStatusCode } from "../constants/httpCode.js";
 import { validationResult } from "express-validator";
+import mongoose from "mongoose";
+import Vehicle from "../models/vehicleModel.js";
+import Bid from "../models/bidModel.js";
 //cookie options
 const options = {
   httpOnly: true,
   //secure: true,
 };
+const MILISECONDS_IN_A_DAY = 86400000;
 /**
  * @description Generate access and refresh token
  * @param {String} userId - User id
@@ -282,6 +286,233 @@ const updateUser = asyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * @description Get user stats
+ * @route GET /api/v1/users/stats
+ * @access Private
+ */
+const getStatsForOwner = asyncHandler(async (req, res) => {
+  const ownerId = req.user._id;
+  //get vehicle stats
+  const vehiclePipeline = [
+    { $match: { "owner._id": new mongoose.Types.ObjectId(ownerId) } },
+    { $count: "nCars" },
+  ];
+  //get bid stats
+  const bidPipeline = [
+    { $match: { "vehicle.owner._id": new mongoose.Types.ObjectId(ownerId) } },
+    {
+      $facet: {
+        revenue: [
+          {
+            $match: {
+              status: "approved",
+            },
+          },
+          {
+            $project: {
+              amount: 1,
+            },
+          },
+          { $group: { _id: null, revenue: { $sum: "$amount" } } },
+        ],
+        bids: [{ $match: { status: "pending" } }, { $count: "noOfBids" }],
+        bookings: [
+          { $match: { status: "approved" } },
+          { $count: "noOfApprovedBids" },
+        ],
+        rejectedBids: [
+          { $match: { status: "rejected" } },
+          { $count: "noOfRejectedBids" },
+        ],
+        avgRentalDay: [
+          {
+            $project: {
+              days: {
+                $divide: [
+                  { $subtract: ["$endDate", "$startDate"] },
+                  MILISECONDS_IN_A_DAY,
+                ],
+              },
+            },
+          },
+          { $group: { _id: null, avgRentalDay: { $avg: "$days" } } },
+        ],
+      },
+    },
+    {
+      $project: {
+        revenue: { $arrayElemAt: ["$revenue.revenue", 0] },
+        bids: { $arrayElemAt: ["$bids.noOfBids", 0] },
+        bookings: { $arrayElemAt: ["$bookings.noOfApprovedBids", 0] },
+        rejectedBids: { $arrayElemAt: ["$rejectedBids.noOfRejectedBids", 0] },
+        avgRentalDay: { $arrayElemAt: ["$avgRentalDay.avgRentalDay", 0] },
+      },
+    },
+  ];
+  // Run the aggregations in parallel
+  const [vehicleResult, bidResult] = await Promise.all([
+    Vehicle.aggregate(vehiclePipeline),
+    Bid.aggregate(bidPipeline),
+  ]);
+
+  const nCars = (vehicleResult[0] && vehicleResult[0].nCars) || 0;
+  const bidStats = bidResult[0] || {};
+
+  const stat = {
+    cars: nCars,
+    revenue: bidStats.revenue || 0,
+    bids: bidStats.bids || 0,
+    bookings: bidStats.bookings || 0,
+    rejectedBids: bidStats.rejectedBids || 0,
+    avgRentalDay: Math.ceil(bidStats.avgRentalDay) || 0,
+  };
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        stat,
+        "User stats fetched successfully"
+      )
+    );
+});
+
+/**
+ * @description Get super admin stats
+ * @route GET /api/v1/users/stats/superAdmin
+ */
+const getStatsForSuperAdmin = asyncHandler(async (req, res) => {
+  // Pipeline to count vehicles
+  const vehiclePipeline = [{ $count: "nCars" }];
+  // Pipeline to count users
+  const usersPipeline = [{ $count: "nUsers" }];
+
+  // Pipeline to compute bid statistics using $facet
+  const bidPipeline = [
+    {
+      $facet: {
+        revenue: [
+          {
+            $match: {
+              status: "approved",
+            },
+          },
+          {
+            $project: {
+              amount: 1,
+            },
+          },
+          { $group: { _id: null, revenue: { $sum: "$amount" } } },
+        ],
+        bids: [{ $match: { status: "pending" } }, { $count: "noOfBids" }],
+        bookings: [
+          { $match: { status: "approved" } },
+          { $count: "noOfApprovedBids" },
+        ],
+        rejectedBids: [
+          { $match: { status: "rejected" } },
+          { $count: "noOfRejectedBids" },
+        ],
+        avgRentalDay: [
+          {
+            $project: {
+              days: {
+                $divide: [
+                  { $subtract: ["$endDate", "$startDate"] },
+                  MILISECONDS_IN_A_DAY,
+                ],
+              },
+            },
+          },
+          { $group: { _id: null, avgRentalDay: { $avg: "$days" } } },
+        ],
+      },
+    },
+    {
+      $project: {
+        revenue: {
+          $toDouble: {
+            $ifNull: [{ $arrayElemAt: ["$revenue.revenue", 0] }, 0],
+          },
+        },
+        bids: {
+          $toDouble: { $ifNull: [{ $arrayElemAt: ["$bids.noOfBids", 0] }, 0] },
+        },
+        bookings: {
+          $toDouble: {
+            $ifNull: [{ $arrayElemAt: ["$bookings.noOfApprovedBids", 0] }, 0],
+          },
+        },
+        rejectedBids: {
+          $toDouble: {
+            $ifNull: [
+              { $arrayElemAt: ["$rejectedBids.noOfRejectedBids", 0] },
+              0,
+            ],
+          },
+        },
+        avgRentalDay: {
+          $toDouble: {
+            $ifNull: [{ $arrayElemAt: ["$avgRentalDay.avgRentalDay", 0] }, 0],
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        revenue: 1,
+        bids: 1,
+        bookings: 1,
+        rejectedBids: 1,
+        avgRentalDay: 1,
+        conversionRatio: {
+          $cond: [
+            { $eq: [{ $add: ["$bids", "$rejectedBids"] }, 0] },
+            0,
+            {
+              $divide: ["$bookings", { $add: ["$bids", "$rejectedBids"] }],
+            },
+          ],
+        },
+      },
+    },
+  ];
+
+  // Run the aggregations in parallel
+  const [vehicleResult, bidResult, userResult] = await Promise.all([
+    Vehicle.aggregate(vehiclePipeline),
+    Bid.aggregate(bidPipeline),
+    User.aggregate(usersPipeline),
+  ]);
+
+  // Extract counts or set to 0 if no result exists.
+  const nCars = (vehicleResult[0] && vehicleResult[0].nCars) || 0;
+  const bidStats = bidResult[0] || {};
+  const nUsers = (userResult[0] && userResult[0].nUsers) || 0;
+
+  const stat = {
+    cars: nCars,
+    revenue: bidStats.revenue || 0,
+    bids: bidStats.bids || 0,
+    bookings: bidStats.bookings || 0,
+    rejectedBids: bidStats.rejectedBids || 0,
+    avgRentalDay: Math.floor(bidStats.avgRentalDay) || 0,
+    conversionRatio: Number(bidStats.conversionRatio * 100).toFixed(2) || 0,
+    users: nUsers,
+  };
+
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        stat,
+        "Super admin stats fetched successfully"
+      )
+    );
+});
+
 export {
   loginUser,
   registerUser,
@@ -289,4 +520,6 @@ export {
   renewAccessToken,
   changePassword,
   updateUser,
+  getStatsForOwner,
+  getStatsForSuperAdmin,
 };

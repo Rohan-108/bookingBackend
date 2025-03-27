@@ -6,7 +6,16 @@ import Bid from "../models/bidModel.js";
 import Vehicle from "../models/vehicleModel.js";
 import { validationResult } from "express-validator";
 import { runInTransaction } from "../utils/runTransactions.js";
+import mongoose from "mongoose";
+import createTripInvoice from "../services/invoiceGeneratorService.js";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
+import { uploadPdfBufferToS3 } from "../services/awsS3.js";
+import getDaysDiff from "../utils/getDaysDiff.js";
 
+// Configure the SQS client (AWS credentials and region can be set via environment variables)
+const REGION = process.env.AWS_REGION; // e.g., 'us-west-2'
+const queueUrl = `https://sqs.${REGION}.amazonaws.com/${process.env.AWS_ACCOUNT_ID}/${process.env.SQS_QUEUE_NAME}`;
+const sqsClient = new SQSClient({ region: REGION });
 /**
  * @description Add bid to the database
  * @route POST /api/v1/bids/:id
@@ -42,6 +51,10 @@ const addBid = asyncHandler(async (req, res) => {
       rentalPriceOutStation: vehicle.rentalPriceOutStation,
       ratePerKm: vehicle.ratePerKm,
       fixedKilometer: vehicle.fixedKilometer,
+      location: vehicle.location,
+      transmission: vehicle.transmission,
+      fuelType: vehicle.fuelType,
+      vehicleType: vehicle.vehicleType,
       owner: vehicle.owner,
     },
   });
@@ -140,6 +153,12 @@ const getAllByOwner = asyncHandler(async (req, res) => {
   let { filter = {}, sort = { createdAt: -1 } } = req.query;
   filter = JSON.parse(filter);
   sort = JSON.parse(sort);
+  if (filter["vehicle._id"]) {
+    filter["vehicle._id"] = new mongoose.Types.ObjectId(filter["vehicle._id"]);
+  }
+  if (filter["startDate"]) {
+    filter["startDate"] = { $lte: new Date(filter["startDate"]) };
+  }
   const userId = req.user._id;
   const pageNumberInt = parseInt(pageNumber);
   const pageSizeInt = parseInt(pageSize);
@@ -147,7 +166,7 @@ const getAllByOwner = asyncHandler(async (req, res) => {
   const [{ total, bids, pages }] = await Bid.aggregate([
     {
       $match: {
-        "vehicle.owner._id": userId,
+        "vehicle.owner._id": new mongoose.Types.ObjectId(userId),
       },
     },
     {
@@ -213,9 +232,28 @@ const rejectBid = asyncHandler(async (req, res) => {
       "Bid not found"
     );
   }
+  //check if the user is authorized to reject the bid
+  if (bid.vehicle.owner._id.toString() !== req.user._id.toString()) {
+    throw new APIError(
+      "Unauthorized",
+      HttpStatusCode.UNAUTHORIZED,
+      true,
+      "You are not authorized to reject this bid"
+    );
+  }
   //reject the bid
   bid.status = "rejected";
   await bid.save();
+  //send email to user
+  const params = {
+    MessageBody: JSON.stringify({
+      email: bid.user.email,
+      subject: "Bid Rejection",
+      Body: `Your bid for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate} with amount ${bid.amount} has been rejected`,
+    }),
+    QueueUrl: queueUrl,
+  };
+  await sqsClient.send(new SendMessageCommand(params));
   res
     .status(HttpStatusCode.OK)
     .json(new ApiResponse(HttpStatusCode.OK, bid, "Bid approved successfully"));
@@ -237,6 +275,15 @@ const approveBid = asyncHandler(async (req, res) => {
   }
   const bidId = req.params.id;
   const bid = await Bid.findById(bidId);
+  //check if the user is the owner of the vehicle
+  if (bid.vehicle.owner._id.toString() !== req.user._id.toString()) {
+    throw new APIError(
+      "Unauthorized",
+      HttpStatusCode.UNAUTHORIZED,
+      true,
+      "You are not authorized to approve this bid"
+    );
+  }
   await runInTransaction(async (session) => {
     //approve the bid
     await Bid.findByIdAndUpdate(bidId, { status: "approved" }, { session });
@@ -250,8 +297,17 @@ const approveBid = asyncHandler(async (req, res) => {
       { $set: { status: "rejected" } },
       { session }
     );
-    //TODO: Notify the user that their bid has been rejected and approved
   });
+  //send email to user
+  const params = {
+    MessageBody: JSON.stringify({
+      email: bid.user.email,
+      subject: "Bid Approval",
+      Body: `Your bid has been approved for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate} with amount ${bid.amount}`,
+    }),
+    QueueUrl: queueUrl,
+  };
+  await sqsClient.send(new SendMessageCommand(params));
   res
     .status(HttpStatusCode.OK)
     .json(new ApiResponse(HttpStatusCode.OK, bid, "Bid approved successfully"));
@@ -291,6 +347,196 @@ const getBookedDates = asyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * @description Get unique vehicles for given status
+ * @route GET /api/v1/bids/uniqueVehicles
+ */
+const getUniqueVehicles = asyncHandler(async (req, res) => {
+  const result = await Bid.aggregate([
+    {
+      $match: {
+        "vehicle.owner._id": new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      $project: {
+        vehicle: 1,
+      },
+    },
+    {
+      $group: {
+        _id: "$vehicle._id",
+        name: { $first: "$vehicle.name" },
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+      },
+    },
+  ]);
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        { vehicles: result },
+        "Unique vehicles retrieved successfully"
+      )
+    );
+});
+
+/**
+ * @description Add start odometer to the bid
+ * @route PATCH /api/v1/bids/startOdometer/:id
+ */
+const addStartOdometer = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new APIError(
+      "Bad Request",
+      HttpStatusCode.BAD_REQUEST,
+      true,
+      errors.array()
+    );
+  }
+  const bidId = req.params.id;
+  const { currentOdometer } = req.body;
+  const bid = await Bid.findByIdAndUpdate(
+    bidId,
+    { startOdometer: currentOdometer },
+    { new: true }
+  );
+  res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        bid,
+        "Start odometer added successfully"
+      )
+    );
+});
+
+/**
+ * @description Add final odometer to the bid
+ * @route PATCH /api/v1/bids/finalOdometer/:id
+ */
+const addFinalOdometer = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new APIError(
+      "Bad Request",
+      HttpStatusCode.BAD_REQUEST,
+      true,
+      errors.array()
+    );
+  }
+  const bidId = req.params.id;
+  const { currentOdometer } = req.body;
+  const bid = await Bid.findByIdAndUpdate(
+    bidId,
+    { finalOdometer: currentOdometer },
+    { new: true }
+  );
+  res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        bid,
+        "Final odometer added successfully"
+      )
+    );
+});
+
+/**
+ * @description End trip and generate invoice
+ * @route PATCH /api/v1/bids/endTrip/:id
+ */
+const endTripAndGenerateInvoice = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new APIError(
+      "Bad Request",
+      HttpStatusCode.BAD_REQUEST,
+      true,
+      errors.array()
+    );
+  }
+  const bidId = req.params.id;
+  const bid = await Bid.findById(bidId);
+  if (!bid) {
+    throw new APIError(
+      "Not Found",
+      HttpStatusCode.NOT_FOUND,
+      true,
+      "Bid not found"
+    );
+  }
+  //calculate the total amount
+  const tripDetails = {};
+  tripDetails.id = bid._id;
+  const startDate = bid.startDate.toISOString().split("T")[0];
+  const endDate = bid.endDate.toISOString().split("T")[0];
+  const noOfDays = getDaysDiff(startDate, endDate);
+  tripDetails.startOdometer = bid.startOdometer;
+  tripDetails.finalOdometer = bid.finalOdometer;
+  tripDetails.fixedKilometer = bid.vehicle.fixedKilometer;
+  tripDetails.ratePerKm = bid.vehicle.ratePerKm;
+  tripDetails.amount = bid.amount;
+  tripDetails.noOfDays = noOfDays;
+  tripDetails.startDate = bid.startDate;
+  tripDetails.endDate = bid.endDate;
+  tripDetails.totalDistance = bid.finalOdometer - bid.startOdometer;
+  //calculate extra kilometers
+  tripDetails.extraKilometer = Math.max(
+    bid.finalOdometer -
+      bid.startOdometer -
+      bid.vehicle.fixedKilometer * noOfDays,
+    0
+  );
+  //calculate extra amount
+  tripDetails.extraAmount = tripDetails.extraKilometer * tripDetails.ratePerKm;
+  //calculate total amount
+  tripDetails.totalAmount = tripDetails.amount + tripDetails.extraAmount;
+  //set car owner, user and vehicle details
+  tripDetails.carOwner = bid.vehicle.owner;
+  tripDetails.user = bid.user;
+  tripDetails.vehicle = bid.vehicle;
+  //generate invoice
+  const pdfBuffer = await createTripInvoice(tripDetails);
+  const key = `invoice-${bid._id}.pdf`;
+  //upload invoice to S3
+  const location = await uploadPdfBufferToS3(pdfBuffer, key);
+  //update invoice location in the bid
+  await Bid.updateOne(
+    { _id: bid._id },
+    { invoice: location, tripCompleted: true, amount: tripDetails.totalAmount }
+  );
+  //send email to user
+  const params = {
+    MessageBody: JSON.stringify({
+      email: bid.user.email,
+      subject: "Bid Approval",
+      Body: `Your trip has been completed for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate}. Please find the invoice attached.
+      Invoice Link: ${location}`,
+    }),
+    QueueUrl: queueUrl,
+  };
+  await sqsClient.send(new SendMessageCommand(params));
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        { location },
+        "Trip ended and invoice generated successfully"
+      )
+    );
+});
+
 export {
   addBid,
   getAllByUser,
@@ -298,4 +544,8 @@ export {
   rejectBid,
   approveBid,
   getBookedDates,
+  getUniqueVehicles,
+  addStartOdometer,
+  addFinalOdometer,
+  endTripAndGenerateInvoice,
 };

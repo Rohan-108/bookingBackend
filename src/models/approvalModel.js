@@ -4,9 +4,10 @@ import { Schema, model } from "mongoose";
 const userSchema = {
   _id: {
     type: Schema.Types.ObjectId,
+    unique: true,
     required: [true, "Owner id is required"],
   },
-  name: {
+  username: {
     type: String,
     required: [true, "Name is required"],
   },

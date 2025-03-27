@@ -1,7 +1,7 @@
 import asyncHandler from "../utils/asyncHandler.js";
 import { APIError } from "../utils/error.js";
 import ApiResponse from "../utils/ApiResponse.js";
-import { deleteFile } from "../utils/awsS3.js";
+import { deleteFile } from "../services/awsS3.js";
 import { HttpStatusCode } from "../constants/httpCode.js";
 import { validationResult } from "express-validator";
 import Chat from "../models/chatModel.js";

@@ -31,4 +31,5 @@ router
 router
   .route("/:chatId")
   .patch(protect, chatValidator.editChat, chatController.editChat);
+
 export default router;

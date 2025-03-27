@@ -11,20 +11,34 @@ import vehicleRouter from "./routes/vehicleRouter.js";
 import bidRouter from "./routes/bidRouter.js";
 import conversationRouter from "./routes/conversationRouter.js";
 import chatRouter from "./routes/chatRouter.js";
+import chartRouter from "./routes/chartRouter.js";
+import approvalRouter from "./routes/approvalRouter.js";
 import * as dotenv from "dotenv";
 import cors from "cors";
 import { initChatSocket } from "./socket/chatSocket.js";
-//import { v2 as cloudinary } from "cloudinary";
+import { Worker } from "worker_threads";
+import path from "path";
+import { fileURLToPath } from "url";
 //config
 dotenv.config();
-// cloudinary.config({
-//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-//   api_key: process.env.CLOUDINARY_API_KEY,
-//   api_secret: process.env.CLOUDINARY_API_SECRET,
-// });
-
 const app = express();
 const server = createServer(app);
+//worker
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const worker = new Worker(path.join(__dirname, "services/awsSQSService.js"));
+worker.on("message", (message) => {
+  console.log(message);
+});
+worker.on("error", (err) => {
+  console.error(err);
+});
+worker.on("exit", (code) => {
+  if (code !== 0) {
+    console.error(new Error(`Worker stopped with exit code ${code}`));
+  }
+});
+
 //socket
 initChatSocket(server);
 //middlewares
@@ -42,6 +56,8 @@ app.use("/api/v1/vehicles", vehicleRouter);
 app.use("/api/v1/bids", bidRouter);
 app.use("/api/v1/conversations", conversationRouter);
 app.use("/api/v1/chats", chatRouter);
+app.use("/api/v1/charts", chartRouter);
+app.use("/api/v1/approvals", approvalRouter);
 //error handling middleware
 app.use(async (err, req, res, next) => {
   if (!ErrorHandler.isTrustedError(err)) {

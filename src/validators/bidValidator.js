@@ -100,3 +100,20 @@ export const filterBids = checkSchema({
     optional: true,
   },
 });
+
+//validate odometer
+export const odometerValidator = checkSchema({
+  id: {
+    in: ["params"],
+    isMongoId: true,
+    errorMessage: "Invalid bid id",
+  },
+  currentOdometer: {
+    in: ["body"],
+    isInt: {
+      errorMessage: "current odometer must be an integer",
+    },
+    exists: true,
+    errorMessage: "current odometer is required",
+  },
+});

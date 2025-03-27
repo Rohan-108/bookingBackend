@@ -27,7 +27,9 @@ export const initChatSocket = (server) => {
     // Event: Send a message
     // Data should include at least: conversationId, senderId, and message content.
     socket.on("sendMessage", async (data) => {
-      console.log(data);
+      if (data.image) {
+        data.image = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${data.image}`;
+      }
       io.to(data.conversationId).emit("newMessage", data);
       const chat = new Chat(data);
       await chat.save();

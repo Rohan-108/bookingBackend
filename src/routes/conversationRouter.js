@@ -17,6 +17,7 @@ router
     conversationController.getConversation
   );
 
+router.route("/signedUrl").get(protect, conversationController.getSignedUrl);
 router
   .route("/")
   .post(

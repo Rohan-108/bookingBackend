@@ -33,4 +33,41 @@ const protect = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @description Check if user is admin
+ */
+const isAdmin = async (req, res, next) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new APIError(
+        "Forbidden",
+        HttpStatusCode.UNAUTHORIZED,
+        true,
+        "You are not authorized to access this route"
+      );
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const isSuperAdmin = async (req, res, next) => {
+  try {
+    if (req.user?.role !== "super-admin") {
+      throw new APIError(
+        "Forbidden",
+        HttpStatusCode.UNAUTHORIZED,
+        true,
+        "You are not authorized to access this route"
+      );
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export { isAdmin, isSuperAdmin };
 export default protect;

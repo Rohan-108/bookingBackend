@@ -1,5 +1,9 @@
 import { Schema, model } from "mongoose";
-
+import {
+  transmissionEnum,
+  vehicleTypeEnum,
+  fuelEnum,
+} from "../constants/constants.js";
 const MIN_BID_AMOUNT = 0;
 const MAX_BID_AMOUNT = 1000000;
 
@@ -39,6 +43,10 @@ const vehicleSchema = {
     index: true,
     required: [true, "Car id is required"],
   },
+  location: {
+    type: String,
+    required: [true, "Location is required"],
+  },
   name: {
     type: String,
     required: [true, "Name is required"],
@@ -66,6 +74,30 @@ const vehicleSchema = {
   fixedKilometer: {
     type: Number,
     required: [true, "Fixed kilometer is required"],
+  },
+  transmission: {
+    type: String,
+    enum: {
+      values: transmissionEnum,
+      message: "Invalid transmission type",
+    },
+    required: [true, "Transmission is required"],
+  },
+  fuelType: {
+    type: String,
+    enum: {
+      values: fuelEnum,
+      message: "Invalid fuel type",
+    },
+    required: [true, "Fuel is required"],
+  },
+  vehicleType: {
+    type: String,
+    enum: {
+      values: vehicleTypeEnum,
+      message: "Invalid vehicle type",
+    },
+    required: [true, "Vehicle type is required"],
   },
   owner: {
     type: userSchema,
@@ -110,6 +142,21 @@ const bidSchema = new Schema(
     user: {
       type: userSchema,
       required: [true, "User is required"],
+    },
+    startOdometer: {
+      type: Number,
+    },
+    finalOdometer: {
+      type: Number,
+      validate: {
+        validator: function (v) {
+          return v > this.startOdometer;
+        },
+        message: "Final odometer reading must be greater than start odometer",
+      },
+    },
+    invoice: {
+      type: String,
     },
     vehicle: {
       type: vehicleSchema,

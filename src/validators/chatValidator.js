@@ -80,3 +80,23 @@ export const editChat = checkSchema({
     errorMessage: "Message should be a string",
   },
 });
+
+// Get signed URL validator
+export const getSignedUrl = checkSchema({
+  key: {
+    in: ["query"],
+    exists: true,
+    isString: {
+      errorMessage: "Please provide key",
+    },
+    errorMessage: "Key should be a string",
+  },
+  contentType: {
+    in: ["query"],
+    exists: true,
+    isString: {
+      errorMessage: "Please provide contentType",
+    },
+    errorMessage: "contentType should be a string",
+  },
+});

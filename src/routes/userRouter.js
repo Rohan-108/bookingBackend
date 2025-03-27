@@ -1,5 +1,5 @@
 import { Router } from "express";
-import protect from "../middleware/auth.js";
+import protect, { isSuperAdmin, isAdmin } from "../middleware/auth.js";
 import upload from "../middleware/multer.js";
 import * as userController from "../controllers/userController.js";
 import * as userValidator from "../validators/userValidator.js";
@@ -29,4 +29,10 @@ router
     userValidator.updateUser,
     userController.updateUser
   );
+router
+  .route("/stats/owner")
+  .get(protect, isAdmin, userController.getStatsForOwner);
+router
+  .route("/stats/superAdmin")
+  .get(protect, isSuperAdmin, userController.getStatsForSuperAdmin);
 export default router;

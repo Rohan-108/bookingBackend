@@ -10,7 +10,7 @@ const MIN_Fixed_KILOMETER = 100; // Minimum fixed kilometer
 const MAX_Fixed_KILOMETER = 10000; // Maximum fixed kilometer
 const MIN_RATE_PER_KM = 0; // Minimum rate per km
 const MAX_RATE_PER_KM = 5; // Maximum rate per km
-const roles = ["user", "admin", "superadmin"]; // Enum for user roles
+const roles = ["user", "admin", "super-admin"]; // Enum for user roles
 const MIN_BID_AMOUNT = 0;
 const MAX_BID_AMOUNT = 1000000;
 // Enum for vehicle type

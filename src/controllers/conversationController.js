@@ -8,6 +8,7 @@ import User from "../models/userModel.js";
 import Vehicle from "../models/vehicleModel.js";
 import { runInTransaction } from "../utils/runTransactions.js";
 import Chat from "../models/chatModel.js";
+import { generatePresignedUrl } from "../services/awsS3.js";
 /**
  * @description Add conversation (given members and car ids)
  * @route POST /api/v1/conversations
@@ -24,6 +25,7 @@ const addConversation = asyncHandler(async (req, res) => {
   }
   const { members, carId } = req.body;
   const membersPopulated = [];
+  let conversationId;
   //start the transaction
   await runInTransaction(async (session) => {
     //populate members
@@ -72,13 +74,14 @@ const addConversation = asyncHandler(async (req, res) => {
       },
     });
     await conversation.save({ session });
+    conversationId = conversation._id;
   });
   res
     .status(HttpStatusCode.CREATED)
     .json(
       new ApiResponse(
         HttpStatusCode.CREATED,
-        null,
+        { conversationId },
         "Conversation added successfully"
       )
     );
@@ -192,9 +195,37 @@ const deleteConversation = asyncHandler(async (req, res) => {
     );
 });
 
+/**
+ *
+ * @description Get signed URL for uploading image
+ */
+const getSignedUrl = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new APIError(
+      "Bad Request",
+      HttpStatusCode.BAD_REQUEST,
+      true,
+      errors.array()
+    );
+  }
+  const { key, contentType } = req.query;
+  const url = await generatePresignedUrl(key, contentType);
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        { url },
+        "Signed URL generated successfully"
+      )
+    );
+});
+
 export {
   addConversation,
   getConversation,
   getAllConversationsForMember,
   deleteConversation,
+  getSignedUrl,
 };
