@@ -12,8 +12,8 @@ import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { uploadPdfBufferToS3 } from "../services/awsS3.js";
 import getDaysDiff from "../utils/getDaysDiff.js";
 
-// Configure the SQS client (AWS credentials and region can be set via environment variables)
-const REGION = process.env.AWS_REGION; // e.g., 'us-west-2'
+// Configure the SQS client
+const REGION = process.env.AWS_REGION;
 const queueUrl = `https://sqs.${REGION}.amazonaws.com/${process.env.AWS_ACCOUNT_ID}/${process.env.SQS_QUEUE_NAME}`;
 const sqsClient = new SQSClient({ region: REGION });
 /**
@@ -489,7 +489,10 @@ const endTripAndGenerateInvoice = asyncHandler(async (req, res) => {
   tripDetails.noOfDays = noOfDays;
   tripDetails.startDate = bid.startDate;
   tripDetails.endDate = bid.endDate;
-  tripDetails.totalDistance = bid.finalOdometer - bid.startOdometer;
+  tripDetails.totalDistance = Math.max(
+    bid.finalOdometer - bid.startOdometer,
+    0
+  );
   //calculate extra kilometers
   tripDetails.extraKilometer = Math.max(
     bid.finalOdometer -
@@ -519,8 +522,10 @@ const endTripAndGenerateInvoice = asyncHandler(async (req, res) => {
   const params = {
     MessageBody: JSON.stringify({
       email: bid.user.email,
-      subject: "Bid Approval",
-      Body: `Your trip has been completed for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate}. Please find the invoice attached.
+      subject: "Trip Completed(Invoice Generated)",
+      Body: `Your trip has been completed for the vehicle ${
+        bid.vehicle.name
+      } from ${bid.startDate.toDateString()} to ${bid.endDate.toDateString()}. Please find the invoice attached.
       Invoice Link: ${location}`,
     }),
     QueueUrl: queueUrl,

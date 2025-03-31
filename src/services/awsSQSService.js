@@ -5,8 +5,8 @@ import {
   DeleteMessageCommand,
 } from "@aws-sdk/client-sqs";
 import { sendEmail } from "./mailService.js";
-// Configure the SQS client (AWS credentials and region can be set via environment variables)
-const REGION = process.env.AWS_REGION; // e.g., 'us-west-2'
+// Configure the SQS client
+const REGION = process.env.AWS_REGION;
 const queueUrl = `https://sqs.${REGION}.amazonaws.com/${process.env.AWS_ACCOUNT_ID}/${process.env.SQS_QUEUE_NAME}`;
 const sqsClient = new SQSClient({ region: REGION });
 
@@ -14,7 +14,7 @@ const pollQueue = async () => {
   const params = {
     QueueUrl: queueUrl,
     MaxNumberOfMessages: 1,
-    WaitTimeSeconds: 10, // long polling to reduce empty responses
+    WaitTimeSeconds: 10,
   };
 
   try {

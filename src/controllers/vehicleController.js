@@ -115,7 +115,6 @@ const getVehicles = asyncHandler(async (req, res) => {
       delete filter[key];
     }
   });
-  console.log(filter, minPrice, maxPrice);
   // Build the final filter object; always ensure that show is true.
   const finalFilter = { ...filter, show: true };
 
@@ -227,7 +226,10 @@ const updateVehicle = asyncHandler(async (req, res) => {
       "Vehicle not found"
     );
   }
-  const images = req.files?.map((file) => file.location) || vehicle.images;
+  let images = req.files?.map((file) => file.location) || [];
+  if (images.length === 0) {
+    images = vehicle.images;
+  }
   const updatedVehicle = await Vehicle.findByIdAndUpdate(req.params.id, {
     ...req.body,
     images: images,
