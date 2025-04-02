@@ -9,6 +9,7 @@ import { validationResult } from "express-validator";
 import mongoose from "mongoose";
 import Vehicle from "../models/vehicleModel.js";
 import Bid from "../models/bidModel.js";
+import sendMessageToSQS from "../services/awsSQSProducerService.js";
 //cookie options
 const options = {
   httpOnly: true,
@@ -132,6 +133,13 @@ const registerUser = asyncHandler(async (req, res) => {
   });
   await user.save();
   const { accessToken, refreshToken } = await generateToken(user._id);
+  //send message to User
+  const message = {
+    email: user.email,
+    subject: "Welcome to our Car Rental Service",
+    Body: `Welcome ${user.name},\n\nThank you for registering with us. We are excited to have you on board!`,
+  };
+  await sendMessageToSQS(message);
   res
     .status(HttpStatusCode.CREATED)
     .cookie("accessToken", accessToken, options)
@@ -242,6 +250,13 @@ const changePassword = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
   user.password = newPassword;
   await user.save();
+  //send message to User
+  const message = {
+    email: user.email,
+    subject: "Password Changed",
+    Body: `Hello ${user.name},\n\nYour password has been changed successfully.`,
+  };
+  await sendMessageToSQS(message);
   return res
     .status(HttpStatusCode.OK)
     .json(

@@ -8,14 +8,9 @@ import { validationResult } from "express-validator";
 import { runInTransaction } from "../utils/runTransactions.js";
 import mongoose from "mongoose";
 import createTripInvoice from "../services/invoiceGeneratorService.js";
-import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
+import sendMessageToSQS from "../services/awsSQSProducerService.js";
 import { uploadPdfBufferToS3 } from "../services/awsS3.js";
 import getDaysDiff from "../utils/getDaysDiff.js";
-
-// Configure the SQS client
-const REGION = process.env.AWS_REGION;
-const queueUrl = `https://sqs.${REGION}.amazonaws.com/${process.env.AWS_ACCOUNT_ID}/${process.env.SQS_QUEUE_NAME}`;
-const sqsClient = new SQSClient({ region: REGION });
 /**
  * @description Add bid to the database
  * @route POST /api/v1/bids/:id
@@ -245,15 +240,12 @@ const rejectBid = asyncHandler(async (req, res) => {
   bid.status = "rejected";
   await bid.save();
   //send email to user
-  const params = {
-    MessageBody: JSON.stringify({
-      email: bid.user.email,
-      subject: "Bid Rejection",
-      Body: `Your bid for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate} with amount ${bid.amount} has been rejected`,
-    }),
-    QueueUrl: queueUrl,
+  const message = {
+    email: bid.user.email,
+    subject: "Bid Rejection",
+    Body: `Your bid for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate} with amount ${bid.amount} has been rejected`,
   };
-  await sqsClient.send(new SendMessageCommand(params));
+  await sendMessageToSQS(message);
   res
     .status(HttpStatusCode.OK)
     .json(new ApiResponse(HttpStatusCode.OK, bid, "Bid approved successfully"));
@@ -299,15 +291,12 @@ const approveBid = asyncHandler(async (req, res) => {
     );
   });
   //send email to user
-  const params = {
-    MessageBody: JSON.stringify({
-      email: bid.user.email,
-      subject: "Bid Approval",
-      Body: `Your bid has been approved for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate} with amount ${bid.amount}`,
-    }),
-    QueueUrl: queueUrl,
+  const message = {
+    email: bid.user.email,
+    subject: "Bid Approved",
+    Body: `Your bid for the vehicle ${bid.vehicle.name} from ${bid.startDate} to ${bid.endDate} with amount ${bid.amount} has been approved`,
   };
-  await sqsClient.send(new SendMessageCommand(params));
+  await sendMessageToSQS(message);
   res
     .status(HttpStatusCode.OK)
     .json(new ApiResponse(HttpStatusCode.OK, bid, "Bid approved successfully"));
@@ -519,18 +508,15 @@ const endTripAndGenerateInvoice = asyncHandler(async (req, res) => {
     { invoice: location, tripCompleted: true, amount: tripDetails.totalAmount }
   );
   //send email to user
-  const params = {
-    MessageBody: JSON.stringify({
-      email: bid.user.email,
-      subject: "Trip Completed(Invoice Generated)",
-      Body: `Your trip has been completed for the vehicle ${
-        bid.vehicle.name
-      } from ${bid.startDate.toDateString()} to ${bid.endDate.toDateString()}. Please find the invoice attached.
-      Invoice Link: ${location}`,
-    }),
-    QueueUrl: queueUrl,
+  const message = {
+    email: bid.user.email,
+    subject: "Trip Completed(Invoice Generated)",
+    Body: `Your trip has been completed for the vehicle ${
+      bid.vehicle.name
+    } from ${bid.startDate.toDateString()} to ${bid.endDate.toDateString()}. Please find the invoice attached.
+    Invoice Link: ${location}`,
   };
-  await sqsClient.send(new SendMessageCommand(params));
+  await sendMessageToSQS(message);
   return res
     .status(HttpStatusCode.OK)
     .json(

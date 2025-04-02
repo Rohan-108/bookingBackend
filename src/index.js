@@ -26,7 +26,9 @@ const server = createServer(app);
 //worker
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const worker = new Worker(path.join(__dirname, "services/awsSQSService.js"));
+const worker = new Worker(
+  path.join(__dirname, "services/awsSQSConsumerService.js")
+);
 worker.on("message", (message) => {
   console.log(message);
 });
