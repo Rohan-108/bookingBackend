@@ -28,4 +28,8 @@ router
 router
   .route("/revenue/owner/average")
   .get(protect, isAdmin, chartController.getOwnerAverageEarningAgainstOthers);
+
+router
+  .route("/owner/growth/:carId")
+  .get(protect, isAdmin, chartController.getCarGrowthForOwner);
 export default router;

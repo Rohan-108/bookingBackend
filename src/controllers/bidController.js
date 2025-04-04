@@ -11,6 +11,7 @@ import createTripInvoice from "../services/invoiceGeneratorService.js";
 import sendMessageToSQS from "../services/awsSQSProducerService.js";
 import { uploadPdfBufferToS3 } from "../services/awsS3.js";
 import getDaysDiff from "../utils/getDaysDiff.js";
+import redisService from "../services/redisService.js";
 /**
  * @description Add bid to the database
  * @route POST /api/v1/bids/:id
@@ -118,6 +119,12 @@ const getAllByUser = asyncHandler(async (req, res) => {
       },
     },
   ]);
+  //save the result to redis cache
+  await redisService.set(req.cacheKey, {
+    total,
+    bids,
+    pages,
+  });
   res
     .status(HttpStatusCode.OK)
     .json(
@@ -337,7 +344,7 @@ const getBookedDates = asyncHandler(async (req, res) => {
 });
 
 /**
- * @description Get unique vehicles for given status
+ * @description Get unique vehicles for the owner
  * @route GET /api/v1/bids/uniqueVehicles
  */
 const getUniqueVehicles = asyncHandler(async (req, res) => {

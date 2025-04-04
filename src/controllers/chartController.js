@@ -620,6 +620,81 @@ const getOwnerAverageEarningAgainstOthers = asyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * @description No of bids on each car last x days for admin
+ * @route GET /api/v1/charts/owner/growth?days=x&carId=carId
+ */
+const getCarGrowthForOwner = asyncHandler(async (req, res) => {
+  const { days } = req.query;
+  const carId = req.params.carId;
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - days);
+  const matchStage =
+    carId !== "all"
+      ? {
+          "vehicle._id": new mongoose.Types.ObjectId(carId),
+          "vehicle.owner._id": new mongoose.Types.ObjectId(req.user._id),
+          createdAt: {
+            $gte: startDate,
+            $lte: today,
+          },
+        }
+      : {
+          "vehicle.owner._id": new mongoose.Types.ObjectId(req.user._id),
+          createdAt: {
+            $gte: startDate,
+            $lte: today,
+          },
+        };
+
+  const result = await Bid.aggregate([
+    {
+      $match: matchStage,
+    },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        local: {
+          $sum: { $cond: [{ $eq: ["$isOutStation", false] }, 1, 0] },
+        },
+        outstation: {
+          $sum: { $cond: [{ $eq: ["$isOutStation", true] }, 1, 0] },
+        },
+      },
+    },
+    {
+      $sort: { _id: 1 },
+    },
+    {
+      $group: {
+        _id: null,
+        data: {
+          $push: {
+            k: "$_id",
+            v: { local: "$local", outstation: "$outstation" },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        data: { $arrayToObject: "$data" },
+      },
+    },
+  ]);
+  const data = result[0] ? result[0].data : {};
+  return res
+    .status(HttpStatusCode.OK)
+    .json(
+      new ApiResponse(
+        HttpStatusCode.OK,
+        data,
+        "Car growth data retrieved successfully"
+      )
+    );
+});
 export {
   getBookingChartDataForOwner,
   getRevenueChartDataForOwner,
@@ -629,4 +704,5 @@ export {
   getPopularVehicleDetails,
   getMostRevenueMakingOwners,
   getOwnerAverageEarningAgainstOthers,
+  getCarGrowthForOwner,
 };

@@ -5,7 +5,7 @@ import { HttpStatusCode } from "../constants/httpCode.js";
 import Vehicle from "../models/vehicleModel.js";
 import { validationResult } from "express-validator";
 import { Types } from "mongoose";
-
+import redisService from "../services/redisService.js";
 /**
  * @description Add vehicle to the database
  * @route POST /api/v1/vehicles
@@ -81,6 +81,8 @@ const archiveVehicle = asyncHandler(async (req, res) => {
   }
   vehicle.show = false;
   await vehicle.save();
+  // Invalidate the cache
+  if (req?.cacheKey) await redisService.invalidate(req.cacheKey);
   res
     .status(HttpStatusCode.OK)
     .json(
@@ -166,7 +168,8 @@ const getVehicles = asyncHandler(async (req, res) => {
       },
     },
   ]);
-
+  //set the cache
+  await redisService.set(req.cacheKey, { total, vehicles, pages });
   res
     .status(HttpStatusCode.OK)
     .json(
@@ -192,6 +195,8 @@ const getVehicle = asyncHandler(async (req, res) => {
       "Vehicle not found"
     );
   }
+  //set the cache
+  await redisService.set(req.cacheKey, { vehicle });
   res
     .status(HttpStatusCode.OK)
     .json(
@@ -235,6 +240,8 @@ const updateVehicle = asyncHandler(async (req, res) => {
     images: images,
   });
   await updatedVehicle.save();
+  //inavlidate the cache
+  if (req?.cacheKey) await redisService.invalidate(req.cacheKey);
   res
     .status(HttpStatusCode.CREATED)
     .json(

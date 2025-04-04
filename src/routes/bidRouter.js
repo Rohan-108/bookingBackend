@@ -2,7 +2,7 @@ import { Router } from "express";
 import protect, { isAdmin } from "../middleware/auth.js";
 import * as bidController from "../controllers/bidController.js";
 import * as bidValidator from "../validators/bidValidator.js";
-
+import cacheMiddleware from "../middleware/cache.js";
 const router = Router();
 
 //protected routes
@@ -12,7 +12,12 @@ router
 
 router
   .route("/user")
-  .get(protect, bidValidator.filterBids, bidController.getAllByUser);
+  .get(
+    protect,
+    bidValidator.filterBids,
+    cacheMiddleware("bid:user"),
+    bidController.getAllByUser
+  );
 router
   .route("/owner")
   .get(protect, isAdmin, bidValidator.filterBids, bidController.getAllByOwner);

@@ -13,7 +13,7 @@ const sqsClient = new SQSClient({ region: REGION });
 const pollQueue = async () => {
   const params = {
     QueueUrl: queueUrl,
-    MaxNumberOfMessages: 1,
+    MaxNumberOfMessages: 10,
     WaitTimeSeconds: 10,
   };
 
@@ -41,12 +41,11 @@ const pollQueue = async () => {
   }
 };
 
-const startPolling = () => {
+// Start polling when the worker thread starts
+// Set an interval to poll the queue every 10 seconds
+const startConsumer = () => {
   pollQueue().finally(() => {
-    // Wait 1 second before polling again to avoid rapid looping on errors
-    setTimeout(startPolling, 10000);
+    setTimeout(startConsumer, 10000); // Poll every 10 seconds
   });
 };
-
-// Start polling when the worker thread starts
-startPolling();
+startConsumer();

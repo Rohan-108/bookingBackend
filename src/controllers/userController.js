@@ -137,7 +137,8 @@ const registerUser = asyncHandler(async (req, res) => {
   const message = {
     email: user.email,
     subject: "Welcome to our Car Rental Service",
-    Body: `Welcome ${user.name},\n\nThank you for registering with us. We are excited to have you on board!`,
+    Body: `Welcome ${user.username},
+    Thank you for registering with us. We are excited to have you on board!`,
   };
   await sendMessageToSQS(message);
   res
@@ -254,7 +255,7 @@ const changePassword = asyncHandler(async (req, res) => {
   const message = {
     email: user.email,
     subject: "Password Changed",
-    Body: `Hello ${user.name},\n\nYour password has been changed successfully.`,
+    Body: `Hello ${user.username},\n\nYour password has been changed successfully.`,
   };
   await sendMessageToSQS(message);
   return res
