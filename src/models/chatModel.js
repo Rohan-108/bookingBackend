@@ -20,6 +20,16 @@ const sender = {
     required: [true, "Avatar is required"],
   },
 };
+const attachmentSchema = {
+  url: {
+    type: String,
+    required: [true, "Url is required"],
+  },
+  _id: {
+    type: Schema.Types.ObjectId,
+    ref: "Attachment",
+  },
+};
 const chatSchema = new Schema(
   {
     sender: {
@@ -30,10 +40,7 @@ const chatSchema = new Schema(
       type: String,
       maxLength: [1000, "Message is too long"],
     },
-    image: {
-      type: String,
-      default: null,
-    },
+    attachment: attachmentSchema,
     conversationId: {
       type: Schema.Types.ObjectId,
       ref: "Conversation",

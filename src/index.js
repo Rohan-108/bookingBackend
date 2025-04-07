@@ -3,8 +3,11 @@ import { createServer } from "node:http";
 import ErrorHandler from "./middleware/errorHandler.js";
 import helmet from "helmet";
 import morgan from "morgan";
+import * as dotenv from "dotenv";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import connectDB from "./utils/connectDB.js";
+// routers imports
 import healthCheckRouter from "./routes/healthCheckerRouter.js";
 import userRouter from "./routes/userRouter.js";
 import vehicleRouter from "./routes/vehicleRouter.js";
@@ -13,33 +16,13 @@ import conversationRouter from "./routes/conversationRouter.js";
 import chatRouter from "./routes/chatRouter.js";
 import chartRouter from "./routes/chartRouter.js";
 import approvalRouter from "./routes/approvalRouter.js";
-import * as dotenv from "dotenv";
-import cors from "cors";
+import configRouter from "./routes/configRouter.js";
 import { initChatSocket } from "./socket/chatSocket.js";
-import { Worker } from "worker_threads";
-import path from "path";
-import { fileURLToPath } from "url";
+
 //config
 dotenv.config();
 const app = express();
 const server = createServer(app);
-//worker
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
-// const worker = new Worker(
-//   path.join(__dirname, "services/awsSQSConsumerService.js")
-// );
-// worker.on("message", (message) => {
-//   console.log(message);
-// });
-// worker.on("error", (err) => {
-//   console.error(err);
-// });
-// worker.on("exit", (code) => {
-//   if (code !== 0) {
-//     console.error(new Error(`Worker stopped with exit code ${code}`));
-//   }
-// });
 
 //socket
 initChatSocket(server);
@@ -60,6 +43,7 @@ app.use("/api/v1/conversations", conversationRouter);
 app.use("/api/v1/chats", chatRouter);
 app.use("/api/v1/charts", chartRouter);
 app.use("/api/v1/approvals", approvalRouter);
+app.use("/api/v1/config", configRouter);
 //error handling middleware
 app.use(async (err, req, res, next) => {
   if (!ErrorHandler.isTrustedError(err)) {

@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import Chat from "../models/chatModel.js";
+import Attachment from "../models/attachmentModel.js";
 export const initChatSocket = (server) => {
   // Initialize Socket.IO server
   const io = new Server(server, {
@@ -27,13 +28,23 @@ export const initChatSocket = (server) => {
     // Event: Send a message
     // Data should include at least: conversationId, senderId, and message content.
     socket.on("sendMessage", async (data) => {
-      if (data.image) {
-        data.image = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${data.image}`;
+      if (data.attachment) {
+        let url = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${data.attachment.name}`;
+        data.attachment.url = url;
       }
       io.to(data.conversationId).emit("newMessage", data);
-      const chat = new Chat(data);
-      await chat.save();
-      // Broadcast the message to everyone in the conversation room
+      if (data.attachment) {
+        const attachment = new Attachment(data.attachment);
+        await attachment.save();
+        const chat = new Chat({
+          ...data,
+          attachment: { url: data.attachment.url, _id: attachment._id },
+        });
+        await chat.save();
+      } else {
+        const chat = new Chat(data);
+        await chat.save();
+      }
     });
 
     // Handle disconnection
