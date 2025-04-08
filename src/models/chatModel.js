@@ -23,7 +23,6 @@ const sender = {
 const attachmentSchema = {
   url: {
     type: String,
-    required: [true, "Url is required"],
   },
   _id: {
     type: Schema.Types.ObjectId,
